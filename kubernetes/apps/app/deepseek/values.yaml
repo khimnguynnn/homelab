@@ -31,12 +31,14 @@ app:
       memory: "2Gi"
 
   livenessProbe:
+    httpGet: null
     tcpSocket:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
 
   readinessProbe:
+    httpGet: null
     tcpSocket:
       port: http
     initialDelaySeconds: 10
