@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dsh
+spec:
+  ingressClassName: cloudflare-tunnel
+  rules:
+    - host: dsh.0xk3m.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dsh
+                port:
+                  number: 8080
