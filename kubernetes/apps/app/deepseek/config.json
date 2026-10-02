@@ -1,5 +1,0 @@
-{
-  "name": "deepseek",
-  "srcPath": "kubernetes/apps/app/deepseek",
-  "namespace": "app"
-}
