@@ -19,3 +19,15 @@ output "tunnel_ingress_api_token" {
   value       = cloudflare_account_token.tunnel_ingress.value
   sensitive   = true
 }
+
+output "dsh_service_token_client_id" {
+  description = "CF-Access-Client-Id for dsh internal API calls"
+  value       = cloudflare_zero_trust_access_service_token.dsh.client_id
+  sensitive   = true
+}
+
+output "dsh_service_token_client_secret" {
+  description = "CF-Access-Client-Secret for dsh internal API calls"
+  value       = cloudflare_zero_trust_access_service_token.dsh.client_secret
+  sensitive   = true
+}
