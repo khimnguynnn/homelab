@@ -74,9 +74,9 @@ app:
     secrets:
       - secretKey: DSH_BASIC_AUTH_USER
         remoteRef:
-          key: secret/dsh
+          key: app/deepseek
           property: DSH_BASIC_AUTH_USER
       - secretKey: DSH_BASIC_AUTH_PASS
         remoteRef:
-          key: secret/dsh
+          key: app/deepseek
           property: DSH_BASIC_AUTH_PASS
