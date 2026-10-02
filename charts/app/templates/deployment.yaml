@@ -8,6 +8,10 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "app.selectorLabels" . | nindent 6 }}
@@ -64,12 +68,18 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or (and .Values.externalSecret.enabled .Values.externalSecret.secretFiles) .Values.volumeMounts }}
+          {{- if or (and .Values.externalSecret.enabled .Values.externalSecret.secretFiles) .Values.volumeMounts .Values.persistence }}
           volumeMounts:
             {{- if and .Values.externalSecret.enabled .Values.externalSecret.secretFiles }}
             - name: secretfiles
               mountPath: {{ .Values.externalSecret.secretFilesMount }}
               readOnly: true
+            {{- end }}
+            {{- range $name, $pvc := .Values.persistence }}
+            {{- if $pvc.enabled }}
+            - name: {{ $name }}
+              mountPath: {{ $pvc.mountPath }}
+            {{- end }}
             {{- end }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -86,12 +96,19 @@ spec:
                 name: {{ include "app.fullname" . }}-secrets
           {{- end }}
           {{- end }}
-      {{- if or (and .Values.externalSecret.enabled .Values.externalSecret.secretFiles) .Values.volumes }}
+      {{- if or (and .Values.externalSecret.enabled .Values.externalSecret.secretFiles) .Values.volumes .Values.persistence }}
       volumes:
         {{- if and .Values.externalSecret.enabled .Values.externalSecret.secretFiles }}
         - name: secretfiles
           secret:
             secretName: {{ include "app.fullname" . }}-secretfiles
+        {{- end }}
+        {{- range $name, $pvc := .Values.persistence }}
+        {{- if $pvc.enabled }}
+        - name: {{ $name }}
+          persistentVolumeClaim:
+            claimName: {{ include "app.fullname" $ }}-{{ $name }}
+        {{- end }}
         {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

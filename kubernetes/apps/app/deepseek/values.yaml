@@ -1,0 +1,66 @@
+app:
+  replicaCount: 1
+
+  image:
+    repository: khimnguynn/dsh
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  serviceAccount:
+    create: false
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  ingress:
+    enabled: true
+    className: "cloudflare-tunnel"
+    hosts:
+      - host: dsh.0xk3m.dev
+        paths:
+          - path: /
+            pathType: Prefix
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+  strategy:
+    type: Recreate
+
+  persistence:
+    state:
+      enabled: true
+      size: 5Gi
+      accessModes:
+        - ReadWriteOnce
+      mountPath: /home/dsh/.dsh
+    workspace:
+      enabled: true
+      size: 10Gi
+      accessModes:
+        - ReadWriteOnce
+      mountPath: /home/dsh/workspace
+
+  env:
+    - name: DSH_TELEMETRY_DISABLED
+      value: "1"

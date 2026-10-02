@@ -1,0 +1,97 @@
+name: Helm Chart Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**/version.txt'
+  workflow_dispatch:
+    inputs:
+      chart:
+        description: 'Chart to release (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Install helm-push plugin
+        run: helm plugin install https://github.com/chartmuseum/helm-push.git
+
+      - name: Add Helm repo
+        run: |
+          helm repo add 0xk3m https://charts.0xk3m.dev \
+            --username ${{ secrets.CHARTMUSEUM_USERNAME }} \
+            --password ${{ secrets.CHARTMUSEUM_PASSWORD }}
+
+      - name: Get charts to release
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.chart }}" ]; then
+              CHARTS="${{ inputs.chart }}"
+            else
+              # Manual trigger without chart specified - build all charts with version.txt
+              CHARTS=$(find charts -name "version.txt" -exec dirname {} \; | xargs -I{} basename {} | tr '\n' ' ')
+            fi
+          else
+            # Get charts with changed version.txt
+            CHARTS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | \
+              grep 'charts/.*/version.txt' | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          fi
+          echo "charts=$CHARTS" >> $GITHUB_OUTPUT
+          echo "Charts to release: $CHARTS"
+
+      - name: Update Chart.yaml and Push
+        run: |
+          for chart in ${{ steps.changed.outputs.charts }}; do
+            CHART_DIR="charts/$chart"
+            VERSION_FILE="$CHART_DIR/version.txt"
+            CHART_FILE="$CHART_DIR/Chart.yaml"
+
+            if [ -f "$VERSION_FILE" ] && [ -f "$CHART_FILE" ]; then
+              VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+              echo "Releasing $chart version $VERSION..."
+
+              # Update version in Chart.yaml
+              sed -i "s/^version:.*/version: $VERSION/" "$CHART_FILE"
+              sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" "$CHART_FILE"
+
+              echo "Updated $CHART_FILE:"
+              grep -E "^(version|appVersion):" "$CHART_FILE"
+
+              # Package chart
+              helm package "$CHART_DIR"
+
+              PACKAGE=$(ls ${chart}-${VERSION}.tgz 2>/dev/null | head -1)
+              if [ -n "$PACKAGE" ]; then
+                echo "Pushing $PACKAGE to 0xk3m..."
+                helm cm-push "$PACKAGE" 0xk3m \
+                  --username ${{ secrets.CHARTMUSEUM_USERNAME }} \
+                  --password ${{ secrets.CHARTMUSEUM_PASSWORD }} \
+                  --force
+                rm -f "$PACKAGE"
+                echo "✅ $chart@$VERSION released successfully"
+              else
+                echo "❌ Failed to package $chart"
+                exit 1
+              fi
+            else
+              echo "⚠️ Skipping $chart - missing version.txt or Chart.yaml"
+            fi
+          done
+
+      - name: Update Helm repo
+        run: helm repo update 0xk3m

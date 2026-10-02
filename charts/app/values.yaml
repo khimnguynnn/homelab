@@ -164,6 +164,22 @@ tolerations: []
 
 affinity: {}
 
+strategy: {}
+  # type: Recreate
+
+persistence: {}
+  # data:
+  #   enabled: true
+  #   size: 10Gi
+  #   accessModes:
+  #     - ReadWriteOnce
+  #   storageClass: ""
+  #   mountPath: /data
+
+env: []
+  # - name: MY_VAR
+  #   value: "my-value"
+
 externalSecret:
   enabled: false
   refreshInterval: 1h

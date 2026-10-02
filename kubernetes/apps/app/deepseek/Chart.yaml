@@ -1,0 +1,11 @@
+apiVersion: v2
+name: deepseek
+description: DeepSeek Harness (dsh) deployment
+type: application
+version: 0.1.0
+appVersion: "latest"
+
+dependencies:
+  - name: app
+    version: "0.1.5"
+    repository: "https://charts.0xk3m.dev"
