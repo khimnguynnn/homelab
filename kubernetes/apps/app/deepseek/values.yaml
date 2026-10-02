@@ -4,7 +4,7 @@ app:
   image:
     repository: khimnguynn/dsh
     pullPolicy: IfNotPresent
-    tag: "latest"
+    tag: "v1.0.0"
 
   serviceAccount:
     create: false
@@ -64,3 +64,19 @@ app:
   env:
     - name: DSH_TELEMETRY_DISABLED
       value: "1"
+
+  externalSecret:
+    enabled: true
+    refreshInterval: 1h
+    secretStore:
+      name: vault-backend
+      kind: ClusterSecretStore
+    secrets:
+      - secretKey: DSH_BASIC_AUTH_USER
+        remoteRef:
+          key: secret/dsh
+          property: DSH_BASIC_AUTH_USER
+      - secretKey: DSH_BASIC_AUTH_PASS
+        remoteRef:
+          key: secret/dsh
+          property: DSH_BASIC_AUTH_PASS
