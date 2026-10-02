@@ -64,6 +64,8 @@ app:
   env:
     - name: DSH_TELEMETRY_DISABLED
       value: "1"
+    - name: DSH_TRUSTED_HOSTS
+      value: "localhost,127.0.0.1,dsh,dsh.default.svc.cluster.local,dsh.0xk3m.dev"
 
   externalSecret:
     enabled: true
