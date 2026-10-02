@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.6] - 2026-10-02
+- Support for `hostAliases`
+
 ## [0.1.5] - 2026-10-02
 ### Added
 - Support for `strategy` in deployment (e.g., Recreate)
