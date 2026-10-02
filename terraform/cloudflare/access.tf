@@ -1,15 +1,6 @@
 # Cloudflare Access for dsh.0xk3m.dev
 # Uses SSO for browser users + Service Token for app internal calls
 
-resource "cloudflare_zero_trust_access_application" "dsh" {
-  zone_id          = data.cloudflare_zone.homelab.id
-  name             = "DeepSeek Harness"
-  domain           = "dsh.0xk3m.dev"
-  type             = "self_hosted"
-  session_duration = "24h"
-  skip_interstitial = true
-}
-
 # Service Token for app internal API calls
 resource "cloudflare_zero_trust_access_service_token" "dsh" {
   account_id = local.cloudflare_account_id
@@ -52,17 +43,18 @@ resource "cloudflare_zero_trust_access_policy" "dsh_service_token" {
   ]
 }
 
-# Link policies to application
-resource "cloudflare_zero_trust_access_application_policy" "dsh_sso" {
-  application_id = cloudflare_zero_trust_access_application.dsh.id
-  zone_id        = data.cloudflare_zone.homelab.id
-  policy_id      = cloudflare_zero_trust_access_policy.dsh_sso.id
-  precedence     = 1
-}
+# Access Application with linked policies
+resource "cloudflare_zero_trust_access_application" "dsh" {
+  zone_id           = data.cloudflare_zone.homelab.id
+  name              = "DeepSeek Harness"
+  domain            = "dsh.0xk3m.dev"
+  type              = "self_hosted"
+  session_duration  = "24h"
+  skip_interstitial = true
 
-resource "cloudflare_zero_trust_access_application_policy" "dsh_service_token" {
-  application_id = cloudflare_zero_trust_access_application.dsh.id
-  zone_id        = data.cloudflare_zone.homelab.id
-  policy_id      = cloudflare_zero_trust_access_policy.dsh_service_token.id
-  precedence     = 2
+  # Link reusable policies
+  policies = [
+    cloudflare_zero_trust_access_policy.dsh_sso.id,
+    cloudflare_zero_trust_access_policy.dsh_service_token.id
+  ]
 }

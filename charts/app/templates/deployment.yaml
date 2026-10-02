@@ -31,6 +31,10 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ include "app.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
