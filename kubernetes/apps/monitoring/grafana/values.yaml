@@ -83,21 +83,19 @@ grafana:
 
   envFromSecret: grafana-secrets
 
-  # datasources:
-  #   datasources.yaml:
-  #     apiVersion: 1
-  #     datasources:
-  #       - name: Prometheus
-  #         type: prometheus
-  #         url: http://prometheus-server.monitoring.svc.cluster.local
-  #         isDefault: true
-  #         access: proxy
-  #         editable: true
-  #       - name: Loki
-  #         type: loki
-  #         url: http://loki.monitoring.svc.cluster.local:3100
-  #         access: proxy
-  #         editable: true
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server.monitoring.svc.cluster.local
+          isDefault: true
+          access: proxy
+        - name: Loki
+          type: loki
+          url: http://loki.monitoring.svc.cluster.local:3100
+          access: proxy
 
   grafana.ini:
     paths:
