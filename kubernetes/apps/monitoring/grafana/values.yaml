@@ -86,15 +86,6 @@ grafana:
   datasources:
     datasources.yaml:
       apiVersion: 1
-      # One-time cleanup: drop stale DB rows (old auto-generated UIDs) so
-      # Grafana 13 can re-provision with the pinned UIDs below without the
-      # fatal "data source not found" provisioning crash. Safe to remove
-      # once Grafana has started healthy with the pinned UIDs.
-      deleteDatasources:
-        - name: Prometheus
-          orgId: 1
-        - name: Loki
-          orgId: 1
       datasources:
         - name: Prometheus
           uid: prometheus
