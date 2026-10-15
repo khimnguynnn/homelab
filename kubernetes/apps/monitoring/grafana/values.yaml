@@ -88,16 +88,18 @@ grafana:
       apiVersion: 1
       datasources:
         - name: Prometheus
+          uid: prometheus
           type: prometheus
           url: http://prometheus-server.monitoring.svc.cluster.local
           isDefault: true
           access: proxy
-          editable: true
+          editable: false
         - name: Loki
+          uid: loki
           type: loki
           url: http://loki.monitoring.svc.cluster.local:3100
           access: proxy
-          editable: true
+          editable: false
 
   grafana.ini:
     paths:
