@@ -1,0 +1,52 @@
+app:
+  image:
+    repository: khimnguynn/whoiskit
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+
+  imagePullSecrets:
+    - name: regcred
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+
+  env:
+    - name: PORT
+      value: "8080"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  ingress:
+    enabled: true
+    className: cloudflare-tunnel
+    hosts:
+      - host: whoiskit.0xk3m.dev
+        paths:
+          - path: /
+            pathType: Prefix
+
+  externalSecret:
+    enabled: true
+    secrets:
+      - secretKey: API_KEY
+        remoteRef:
+          key: app/whoiskit
+          property: API_KEY

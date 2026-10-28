@@ -1,0 +1,5 @@
+{
+  "name": "whoiskit",
+  "srcPath": "kubernetes/apps/app/whoiskit",
+  "namespace": "app"
+}

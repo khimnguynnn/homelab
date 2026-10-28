@@ -1,0 +1,10 @@
+apiVersion: v2
+name: whoiskit
+description: whoiskit
+type: application
+version: 1.0.0
+
+dependencies:
+  - name: app
+    version: 0.1.4
+    repository: https://charts.0xk3m.dev
