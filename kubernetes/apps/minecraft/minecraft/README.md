@@ -47,14 +47,16 @@ port-forward, hides the home IP); the LoadBalancer Service is for LAN. See §6a.
   already exist. The Service stays `Pending` for an external IP otherwise.
 - A **default StorageClass** supporting `ReadWriteOnce` (same assumption Grafana relies on).
   Pin a specific class with `minecraft.persistence.storageClass` if you don't want the default.
-- **External Secrets + Vault** (already in this repo under `platform/`), and the RCON
-  password seeded in Vault **before first sync**:
+- **External Secrets + Vault** (already in this repo under `platform/`). Seed both keys in
+  Vault **before first sync** (same KV path, so use `put` then `patch`):
 
   ```bash
-  vault kv put secret/minecraft/minecraft rcon-password="$(openssl rand -base64 24)"
+  vault kv put   secret/minecraft/minecraft rcon-password="$(openssl rand -base64 24)"
+  vault kv patch secret/minecraft/minecraft playit-secret-key="<from playit.gg, see §6a>"
   ```
 
-  Without this, the `minecraft-rcon` Secret never materializes and the pod won't start.
+  Without the RCON key the pod won't start; without the playit key the `playit` sidecar
+  crash-loops (the rest of the server still runs). Both are internal-only Secrets, never in git.
 - **Node RAM:** Prominence II wants a lot of memory. This deploy requests **7Gi** and caps
   at **10Gi** per pod, so a worker node needs ~10Gi free to schedule it (the two 14Gi
   workers can, but watch co-located workloads). Lower `minecraft.minecraftServer.memory` +
@@ -113,30 +115,49 @@ Players must install **the exact same pack and version** (v4.1.5hf). Easiest rou
 Keep client and server on the **same pack version**. When you bump the server (§11), each
 player re-imports the matching version, otherwise they'll be rejected on version mismatch.
 
-## 6a. Public internet access (optional)
+## 6a. Public internet access — playit.gg (configured)
 
 The game port is **raw TCP 25565 — not HTTP** — so the repo's `cloudflare-tunnel` Ingress
-class **cannot** carry it (that class only proxies HTTP/S, which is why other apps use it).
-A normal Prism/vanilla client can't reach the game through an HTTP tunnel. Pick one of:
+class **cannot** carry it, and Cloudflare Spectrum (the TCP option) is **not free**. This
+deploy therefore ships a **playit.gg** agent as a sidecar: a free TCP relay that publishes
+the server to the internet with **no public IP, no port-forward**, hiding your home IP and
+working even behind CG-NAT. The LoadBalancer Service stays for LAN play.
 
-- **Cloudflare Spectrum — paid (hostname + hides your IP).** Spectrum is **not on the Free
-  plan**; Minecraft needs at least a **paid plan** (Pro/Business cover selected protocols,
-  Enterprise covers arbitrary TCP). Create a Spectrum app (TCP, edge port 25565) whose origin
-  is your public IP:25565 — which **still needs a router port-forward** to the LoadBalancer IP.
-  Then harden by restricting `minecraft.minecraftServer.loadBalancerSourceRanges` to
-  Cloudflare's published IP ranges so only Cloudflare can reach the origin.
-- **Port-forward + Cloudflare DNS — free.** Forward your router's TCP 25565 → the Service's
-  LoadBalancer IP, and add a **DNS-only (grey-cloud)** record, e.g. `A mc.0xk3m.dev → <public IP>`
-  (optionally an `SRV _minecraft._tcp.mc.0xk3m.dev` record so players can omit the port).
-  Simple, but exposes your home IP.
-- **Client-side tunnel — free, less convenient.** Each player runs a cloudflared/Modflared
-  connector; no port-forward, but everyone must install it.
-- **VPN / LAN only — safest.** e.g. Tailscale; no public exposure at all.
+**One-time activation (the manifests are already in place):**
 
-Set a stable `minecraft.minecraftServer.loadBalancerIP` (from your LB pool) so the
-port-forward / Spectrum origin target doesn't change.
+1. Create a free account at <https://playit.gg> and add an **agent**, copying its
+   **secret key** (Account → Agents, or run the agent once locally to claim it).
+2. Seed it in Vault (same KV path as RCON):
 
-⚠️ This is an offline-mode server — read §13 before exposing it to the internet.
+   ```bash
+   vault kv patch secret/minecraft/minecraft playit-secret-key='<secret-key>'
+   ```
+
+   The `minecraft-playit` ExternalSecret → `minecraft-playit` Secret → the `playit` sidecar.
+3. In the playit dashboard, create a **Minecraft Java** tunnel. Leave the local address at
+   the default **127.0.0.1:25565** (the sidecar shares the pod's network, so this reaches the
+   server). playit assigns a public address — note its **host and port**.
+4. Attach your own domain with an **SRV record** (Cloudflare, DNS-only) so players connect via
+   your hostname:
+
+   ```
+   Type:     SRV
+   Name:     _minecraft._tcp.mc        (i.e. _minecraft._tcp.mc.<your-domain>)
+   Service:  _minecraft    Protocol: _tcp
+   Priority: 0   Weight: 5   Port: <playit port>   Target: <playit host>
+   ```
+
+   Players then join with just `mc.<your-domain>` (the SRV carries the non-standard port).
+
+**Verify / operate:**
+```bash
+kubectl -n minecraft logs deploy/minecraft -c playit    # agent status / tunnel address
+```
+If the sidecar crash-loops, the secret key is missing/invalid — recheck step 2. The rest of
+the server keeps running regardless.
+
+⚠️ This is an offline-mode server now reachable from the internet — the whitelist stays
+deny-by-default, but read §13 before and after going public.
 
 ## 7. Add / change mods
 
@@ -249,12 +270,15 @@ kubectl -n minecraft logs deploy/minecraft -c minecraft -f          # server log
 kubectl -n minecraft logs deploy/minecraft -c <backup-container>     # backup log
 kubectl -n minecraft describe pod -l app.kubernetes.io/name=minecraft
 kubectl -n minecraft get svc minecraft -o wide                      # LoadBalancer IP
-kubectl -n minecraft get externalsecret minecraft-rcon              # SecretSynced?
+kubectl -n minecraft get externalsecret                             # both SecretSynced?
+kubectl -n minecraft logs deploy/minecraft -c playit                # playit tunnel/address
 kubectl -n minecraft exec "$POD" -c minecraft -- rcon-cli list      # online players
 ```
 
 Common issues:
-- **Service EXTERNAL-IP `<pending>`** → no LB implementation / pool exhausted.
+- **Service EXTERNAL-IP `<pending>`** → no LB implementation / pool exhausted (LAN only;
+  public still works via playit).
+- **`playit` sidecar CrashLoopBackOff** → missing/invalid `playit-secret-key` in Vault (§6a).
 - **Pod `CreateContainerConfigError`** → `minecraft-rcon` Secret missing → seed Vault (§2).
 - **Can't join / "You are not white-listed"** → add the username (§8).
 - **Slow first boot** → the modpack is downloading/installing; `startupProbe` allows ~30 min.
@@ -267,17 +291,18 @@ Common issues:
 - **Offline mode (`online-mode=false`, `enforce-secure-profile=false`) disables Mojang
   authentication.** Usernames are self-asserted and **can be impersonated**. The whitelist
   filters by claimed name only — it is *not* an identity control.
-- **Exposing it publicly (§6a) raises the stakes.** Offline servers are constantly scanned
-  and griefed. If you go public, at minimum:
-  - Keep the whitelist enforced (already the default) and only op trusted players (§9).
-  - Prefer Cloudflare Spectrum (hides your origin IP) and restrict
-    `minecraft.minecraftServer.loadBalancerSourceRanges` to Cloudflare's IP ranges; for a
-    direct port-forward, understand your home IP is exposed.
-  - Optionally enable the bundled `networkPolicy` (`networkPolicy.enabled: true` +
-    `networkPolicy.allowedCIDRs`) for pod-level ingress filtering (source-IP preservation is
-    already on via `externalTrafficPolicy: Local`).
-  - For LAN/VPN-only instead, set `loadBalancerSourceRanges` to your LAN/VPN CIDR(s) (e.g.
-    use Tailscale).
+- **It is now reachable from the internet via playit (§6a).** Offline servers are constantly
+  scanned and griefed, so:
+  - The whitelist stays enforced (deny-by-default) and only trusted players are op'd (§9) —
+    this is the main control, since playit forwards all public traffic to the server.
+  - playit already **hides your home IP** (players see playit's relay) and no router port is
+    opened — a real advantage over a direct port-forward.
+  - The LoadBalancer Service is LAN-side; restrict it with
+    `minecraft.minecraftServer.loadBalancerSourceRanges` (your LAN/VPN CIDRs) so it isn't a
+    second, unfiltered door. The optional `networkPolicy` (`networkPolicy.enabled: true`)
+    does not block the playit sidecar (it egresses out), so keep relying on the whitelist.
+  - To stop public access entirely, scale down or remove the `playit` sidecar — the server
+    stays reachable on LAN.
 - **RCON is internal only** (`ClusterIP`, never a LoadBalancer) with its password stored in
   Vault and delivered via an ExternalSecret — never committed to git.
 - **Ops are not auto-granted.** Grant operator only to trusted players (§9).
