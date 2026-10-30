@@ -72,18 +72,11 @@ minecraft:
     # names here explicitly:
     # ops: ""
 
-    # --- Networking: LoadBalancer (MetalLB / Cilium LB IPAM) on TCP 25565 ---
-    serviceType: LoadBalancer
+    # --- Networking: access is via the playit.gg sidecar (see sidecarContainers),
+    #     which reaches the server over the pod's localhost:25565. The Service is
+    #     ClusterIP only (no LoadBalancer needed). ---
+    serviceType: ClusterIP
     servicePort: 25565
-    # Preserve the real client source IP (required for source-range filtering).
-    externalTrafficPolicy: Local
-    # Optional static IP from your LB address pool:
-    # loadBalancerIP: 192.168.1.50
-    # STRONGLY RECOMMENDED: restrict to your LAN/VPN CIDR(s). An empty list means
-    # no source-IP restriction at the LoadBalancer. Do not expose this publicly.
-    loadBalancerSourceRanges: []
-    #  - 192.168.1.0/24
-    #  - 10.0.0.0/8
 
     # --- RCON: internal only. Password comes from the Vault-backed Secret below. ---
     rcon:
@@ -96,11 +89,12 @@ minecraft:
       serviceType: ClusterIP
       port: 25575
 
-    # The modpack ships its own mods (incl. Fabric API + optimizations), so the
-    # per-mod list is empty. Add EXTRA server-safe Modrinth slugs here if wanted;
-    # they install on top of the pack.
+    # The modpack ships its own mods, but its server install leaves out some libs.
+    # The Fabric loader reported Chipped needs athena >= 3.1.1, so we add it here.
+    # If a boot still fails with "missing dependency X", add that slug too.
     modrinth:
-      projects: []
+      projects:
+        - athena
       downloadDependencies: required
       allowedVersionType: release
 
@@ -135,6 +129,11 @@ minecraft:
         capabilities:
           drop:
             - ALL
+      # The agent creates its control socket at /run/playit/playitd.sock; give it
+      # a writable dir there (it runs non-root, so the image path isn't writable).
+      volumeMounts:
+        - name: playit-run
+          mountPath: /run/playit
       resources:
         requests:
           cpu: 25m
@@ -142,6 +141,12 @@ minecraft:
         limits:
           cpu: 100m
           memory: 64Mi
+
+  # Writable dir for the playit sidecar's IPC socket (mounted only on that container).
+  extraVolumes:
+    - volumes:
+        - name: playit-run
+          emptyDir: {}
 
   # --- Persistent world / mods / config (30Gi, RWO). Protected from ArgoCD
   #     prune and from deletion so world data survives upgrades/removal. ---
