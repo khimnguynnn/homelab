@@ -1,25 +1,15 @@
-# Minecraft Java (Fabric) server — itzg/minecraft umbrella chart.
-# Subchart values are nested under the dependency name "minecraft".
 minecraft:
   image:
     repository: itzg/minecraft-server
-    # Pinned to the Java 21 base (required for Minecraft 1.21.1). The Minecraft
-    # version itself is pinned via minecraftServer.version below (VERSION env).
     tag: java21
     pullPolicy: IfNotPresent
 
   replicaCount: 1
 
-  # Single stateful world on a ReadWriteOnce volume => never run two pods at
-  # once. Recreate terminates the old pod before starting the new one.
   strategyType: Recreate
 
-  # Allow time for a graceful stop (world save) and the final on-terminate backup.
   terminationGracePeriodSeconds: 120
 
-  # Tuned for the Prominence II modpack on 14Gi worker nodes: heap 7G + ~3G
-  # off-heap => 10Gi limit, leaving node headroom. Raise toward 8G/11-12Gi only
-  # if a node can spare it (watch for OOMKilled / GC lag).
   resources:
     requests:
       cpu: 1000m
@@ -28,92 +18,50 @@ minecraft:
       cpu: 4000m
       memory: 10Gi
 
-  # A ~300-mod pack downloads and builds registries on first boot, which can
-  # take many minutes over home internet; allow ~30 min before the liveness/
-  # readiness probes kick in. (Only affects the first/cold start.)
   startupProbe:
     enabled: true
     failureThreshold: 120
     periodSeconds: 15
-  # readinessProbe / livenessProbe keep the chart defaults (exec: mc-health).
 
   minecraftServer:
     eula: "TRUE"
-    # MODRINTH installs a Modrinth modpack (Prominence II, see extraEnv below).
-    # The pack dictates the mod loader (Fabric) and its own mod list.
     type: MODRINTH
-    # Prominence II: Hasturian Era is Minecraft 1.20.1 (NOT 1.21.1). Keep this in
-    # sync with the modpack's Minecraft version.
     version: "1.20.1"
 
     gameMode: survival
     difficulty: normal
     maxPlayers: 5
-    # Reduced for a heavy RPG pack on constrained nodes (raise if nodes allow).
     viewDistance: 6
     motd: "Prominence II - Hasturian Era"
 
-    # JVM heap (Xms=Xmx). 7168M = 7Gi; container limit above is 10Gi.
     memory: "7168M"
 
-    # --- Offline / cracked-client support (PrismLauncher-Cracked) ---
-    # SECURITY: offline mode does NOT verify identity. See README "Security".
     onlineMode: false
     enforceSecureProfile: false
 
-    # Whitelist is deny-by-default: ENABLE_WHITELIST + ENFORCE_WHITELIST are set
-    # via extraEnv below, so nobody can join until an admin adds names.
-    # To manage declaratively via GitOps, set a comma-separated list here, e.g.
-    #   whitelist: "Alice,Bob"
-    # (adding OVERRIDE_WHITELIST: "true" to extraEnv then makes git authoritative).
-    # whitelist: ""
-    #
-    # Operators are NOT granted automatically. Add deliberately via RCON, or set
-    # names here explicitly:
-    # ops: ""
-
-    # --- Networking: access is via the playit.gg sidecar (see sidecarContainers),
-    #     which reaches the server over the pod's localhost:25565. The Service is
-    #     ClusterIP only (no LoadBalancer needed). ---
     serviceType: ClusterIP
     servicePort: 25565
 
-    # --- RCON: internal only. Password comes from the Vault-backed Secret below. ---
     rcon:
       enabled: true
-      # Use the existing Secret (below) instead of a chart-generated random
-      # password, which would be regenerated on every ArgoCD sync.
       withGeneratedPassword: false
       existingSecret: minecraft-rcon
       secretKey: rcon-password
       serviceType: ClusterIP
       port: 25575
 
-    # The modpack ships its own mods, but its server install leaves out some libs.
-    # The Fabric loader reported Chipped needs athena >= 3.1.1, so we add it here.
-    # If a boot still fails with "missing dependency X", add that slug too.
     modrinth:
       projects:
-        - athena
+        - athena-ctm
       downloadDependencies: required
       allowedVersionType: release
 
-  # Options without a dedicated chart key are passed as container env vars.
   extraEnv:
-    # Prominence II: Hasturian Era, pinned to version 4.1.5hf (Fabric, MC 1.20.1).
-    # The version-page URL both selects the pack and pins the version.
     MODRINTH_MODPACK: "https://modrinth.com/modpack/prominence-2-fabric/version/4.1.5hf"
-    # No chart value exists for simulation-distance; set it via the image env.
     SIMULATION_DISTANCE: "5"
-    # Enforce the whitelist (deny-by-default) without wiping manual RCON changes.
     ENABLE_WHITELIST: "true"
     ENFORCE_WHITELIST: "true"
 
-  # playit.gg agent — free TCP relay that publishes the server to the internet
-  # with no public IP / port-forward and hides the home IP (works behind CG-NAT).
-  # Runs beside the server and serves the tunnel whose local address is the
-  # default 127.0.0.1:25565. Setup steps (account, secret, tunnel, SRV record):
-  # see README "6a. Public internet access".
   sidecarContainers:
     - name: playit
       image: ghcr.io/playit-cloud/playit-agent:1.2.0
@@ -129,8 +77,6 @@ minecraft:
         capabilities:
           drop:
             - ALL
-      # The agent creates its control socket at /run/playit/playitd.sock; give it
-      # a writable dir there (it runs non-root, so the image path isn't writable).
       volumeMounts:
         - name: playit-run
           mountPath: /run/playit
@@ -142,38 +88,26 @@ minecraft:
           cpu: 100m
           memory: 64Mi
 
-  # Writable dir for the playit sidecar's IPC socket (mounted only on that container).
   extraVolumes:
     - volumes:
         - name: playit-run
           emptyDir: {}
 
-  # --- Persistent world / mods / config (30Gi, RWO). Protected from ArgoCD
-  #     prune and from deletion so world data survives upgrades/removal. ---
   persistence:
     annotations:
       argocd.argoproj.io/sync-options: Prune=false,Delete=false
       helm.sh/resource-policy: keep
-    # Leave storageClass unset to use the cluster default StorageClass (must
-    # support ReadWriteOnce). Set it to pin a specific class:
-    # storageClass: "your-storageclass"
     dataDir:
       enabled: true
-      # Larger for the modpack files + RPG world growth.
       Size: 40Gi
       accessModes:
         - ReadWriteOnce
 
-  # --- Application-consistent daily backups via the mc-backup sidecar.
-  #     It uses RCON (save-off/save-all/save-on) so the world is flushed and
-  #     consistent, and restores autosave even if the backup step fails. ---
   mcbackup:
     enabled: true
-    # Run a final backup when the pod is terminating (uses terminationGrace above).
     backupOnTerminate: true
     backupInterval: "24h"
     pruneBackupsDays: 7
-    # Skip periodic backups while no players are online (reduces churn).
     pauseIfNoPlayers: "true"
     backupMethod: tar
     compressMethod: gzip
@@ -194,9 +128,6 @@ minecraft:
         accessModes:
           - ReadWriteOnce
 
-# Vault-backed RCON password -> creates Secret "minecraft-rcon" (key rcon-password).
-# PREREQUISITE (run once before first sync):
-#   vault kv put secret/minecraft/minecraft rcon-password='<strong-random-password>'
 external-secret-helper:
   externalSecrets:
     - name: minecraft-rcon
@@ -206,8 +137,6 @@ external-secret-helper:
           remoteRef:
             key: minecraft/minecraft
             property: rcon-password
-    # playit.gg agent secret key (from the playit dashboard). Seed in Vault with:
-    #   vault kv patch secret/minecraft/minecraft playit-secret-key='<key>'
     - name: minecraft-playit
       refreshInterval: 1h
       data:
@@ -216,10 +145,6 @@ external-secret-helper:
             key: minecraft/minecraft
             property: playit-secret-key
 
-# Optional NetworkPolicy (defense-in-depth), rendered by this chart's local
-# template. Disabled by default. When enabled, only allowedCIDRs may reach
-# TCP 25565; an empty list allows any source but still blocks other ports.
 networkPolicy:
   enabled: false
   allowedCIDRs: []
-  #  - 192.168.1.0/24

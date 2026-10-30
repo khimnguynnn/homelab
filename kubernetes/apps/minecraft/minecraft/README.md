@@ -21,14 +21,14 @@ Workload (namespace: minecraft)
     ├─ container minecraft     (itzg/minecraft-server:java21)  → PVC minecraft-datadir  (40Gi, /data)
     ├─ container mc-backup     (itzg/mc-backup)                → PVC minecraft-backupdir (25Gi, /backups)
     └─ container playit        (playit-agent)  public internet relay → 127.0.0.1:25565
-  Service minecraft       LoadBalancer  TCP 25565   (LAN; externalTrafficPolicy: Local)
+  Service minecraft       ClusterIP     TCP 25565   (in-cluster; playit reaches it via localhost)
   Service minecraft-rcon  ClusterIP     TCP 25575   (internal only)
   Secret  minecraft-rcon   ← ExternalSecret ← Vault (secret/minecraft/minecraft)
   Secret  minecraft-playit ← ExternalSecret ← Vault (secret/minecraft/minecraft)
   NetworkPolicy           optional (disabled by default)
 
 Public access: the playit.gg sidecar relays the internet to the server (no public IP /
-port-forward, hides the home IP); the LoadBalancer Service is for LAN. See §6a.
+port-forward, hides the home IP). No LoadBalancer is used. See §6a.
 ```
 
 - **Modpack:** [Prominence II: Hasturian Era](https://modrinth.com/modpack/prominence-2-fabric)
@@ -42,9 +42,9 @@ port-forward, hides the home IP); the LoadBalancer Service is for LAN. See §6a.
 ## 2. Prerequisites
 
 - ArgoCD running (bootstrap root Application syncs `kubernetes/projects/`).
-- A **LoadBalancer implementation** that serves `type: LoadBalancer` Services on the
-  cluster (MetalLB **or** Cilium LB-IPAM). ⚠️ This repo does **not** manage one; it must
-  already exist. The Service stays `Pending` for an external IP otherwise.
+- No LoadBalancer is required — the Service is `ClusterIP` and public access goes through the
+  playit.gg sidecar (§6a). (For LAN-direct play instead, switch `serviceType` back to
+  `LoadBalancer` and you'll then need MetalLB/Cilium LB-IPAM.)
 - A **default StorageClass** supporting `ReadWriteOnce` (same assumption Grafana relies on).
   Pin a specific class with `minecraft.persistence.storageClass` if you don't want the default.
 - **External Secrets + Vault** (already in this repo under `platform/`). Seed both keys in
@@ -95,13 +95,10 @@ v4.1.5hf** pack — a vanilla or Fabric-only client **cannot** join.
 1. In Prism: **Add Account → Offline**, pick a username.
 2. Install the modpack as an instance (see §6).
 3. The player's username must be on the whitelist (see §8) — the server is deny-by-default.
-4. Find the server address:
-
-   ```bash
-   kubectl -n minecraft get svc minecraft -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-   ```
-
-   Add a server in-game pointing at `<EXTERNAL-IP>:25565` (or your public hostname, see §6a).
+4. Connect to the **playit address** (or your `mc.<domain>` hostname) — see §6a. The Service
+   is `ClusterIP`, so there's no LAN LoadBalancer IP; everyone reaches it through playit.
+   (Admins can also `kubectl -n minecraft port-forward svc/minecraft 25565:25565` for a quick
+   local connection.)
 
 ## 6. Installing the matching modpack on clients
 
@@ -276,8 +273,11 @@ kubectl -n minecraft exec "$POD" -c minecraft -- rcon-cli list      # online pla
 ```
 
 Common issues:
-- **Service EXTERNAL-IP `<pending>`** → no LB implementation / pool exhausted (LAN only;
-  public still works via playit).
+- **Server exits with "Incompatible mods found! … requires X"** → the modpack's server install
+  is missing a library. Add that mod's Modrinth slug to `minecraftServer.modrinth.projects`
+  (e.g. `athena` is already added for Chipped) and re-sync. Repeat if a new one is reported.
+- **`playit` sidecar `Failed to bind to socket`** → it needs a writable `/run/playit`
+  (mounted via `extraVolumes`); already configured.
 - **`playit` sidecar CrashLoopBackOff** → missing/invalid `playit-secret-key` in Vault (§6a).
 - **Pod `CreateContainerConfigError`** → `minecraft-rcon` Secret missing → seed Vault (§2).
 - **Can't join / "You are not white-listed"** → add the username (§8).
@@ -297,12 +297,11 @@ Common issues:
     this is the main control, since playit forwards all public traffic to the server.
   - playit already **hides your home IP** (players see playit's relay) and no router port is
     opened — a real advantage over a direct port-forward.
-  - The LoadBalancer Service is LAN-side; restrict it with
-    `minecraft.minecraftServer.loadBalancerSourceRanges` (your LAN/VPN CIDRs) so it isn't a
-    second, unfiltered door. The optional `networkPolicy` (`networkPolicy.enabled: true`)
-    does not block the playit sidecar (it egresses out), so keep relying on the whitelist.
-  - To stop public access entirely, scale down or remove the `playit` sidecar — the server
-    stays reachable on LAN.
+  - The Service is `ClusterIP` (no LoadBalancer door); the only public path is the playit
+    sidecar. The optional `networkPolicy` does not block that sidecar (it egresses out), so
+    keep relying on the whitelist.
+  - To stop public access entirely, remove the `playit` sidecar (and `extraVolumes`) — the
+    server then stays reachable only in-cluster / via `kubectl port-forward`.
 - **RCON is internal only** (`ClusterIP`, never a LoadBalancer) with its password stored in
   Vault and delivered via an ExternalSecret — never committed to git.
 - **Ops are not auto-granted.** Grant operator only to trusted players (§9).
