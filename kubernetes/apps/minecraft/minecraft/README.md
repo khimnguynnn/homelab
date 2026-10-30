@@ -275,7 +275,7 @@ kubectl -n minecraft exec "$POD" -c minecraft -- rcon-cli list      # online pla
 Common issues:
 - **Server exits with "Incompatible mods found! … requires X"** → the modpack's server install
   is missing a library. Add that mod's Modrinth slug to `minecraftServer.modrinth.projects`
-  (e.g. `athena` is already added for Chipped) and re-sync. Repeat if a new one is reported.
+  (e.g. `athena-ctm` is already added for Chipped) and re-sync. Repeat if a new one is reported.
 - **`playit` sidecar `Failed to bind to socket`** → it needs a writable `/run/playit`
   (mounted via `extraVolumes`); already configured.
 - **`playit` sidecar CrashLoopBackOff** → missing/invalid `playit-secret-key` in Vault (§6a).
