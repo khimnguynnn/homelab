@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  annotations:
+    argocd-autopilot.argoproj-labs.io/default-dest-server: https://kubernetes.default.svc
+    argocd.argoproj.io/sync-options: PruneLast=true
+    argocd.argoproj.io/sync-wave: "-1"
+  creationTimestamp: null
+  name: minecraft
+  namespace: argocd
+spec:
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  description: minecraft project
+  destinations:
+    - namespace: "*"
+      server: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  sourceRepos:
+    - "*"
+status: {}
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: minecraft
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: https://github.com/khimnguynnn/homelab.git
+        revision: HEAD
+        files:
+          - path: kubernetes/apps/minecraft/*/config.json
+  template:
+    metadata:
+      name: "{{ .name }}"
+      namespace: argocd
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-failed.telegram: ""
+        notifications.argoproj.io/subscribe.on-health-degraded.telegram: ""
+        notifications.argoproj.io/subscribe.on-sync-status-unknown.telegram: ""
+        notifications.argoproj.io/subscribe.on-sync-succeeded.telegram: ""
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: minecraft
+      source:
+        repoURL: https://github.com/khimnguynnn/homelab.git
+        targetRevision: HEAD
+        path: "{{ .srcPath }}"
+        helm:
+          valueFiles:
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ dig "namespace" "minecraft" . }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

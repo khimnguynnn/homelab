@@ -1,0 +1,13 @@
+apiVersion: v2
+name: minecraft
+description: Minecraft Java (Fabric) server
+type: application
+version: 1.0.0
+
+dependencies:
+  - name: minecraft
+    version: 5.3.1
+    repository: https://itzg.github.io/minecraft-server-charts/
+  - name: external-secret-helper
+    version: 0.1.2
+    repository: https://charts.0xk3m.dev

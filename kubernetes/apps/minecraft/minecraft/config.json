@@ -1,0 +1,5 @@
+{
+  "name": "minecraft",
+  "srcPath": "kubernetes/apps/minecraft/minecraft",
+  "namespace": "minecraft"
+}
