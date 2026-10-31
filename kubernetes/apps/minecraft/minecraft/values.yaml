@@ -24,9 +24,14 @@ minecraft:
     periodSeconds: 15
 
   minecraftServer:
+    whitelist: "f6711342-17ef-35fa-9dc5-078b0bfe88b8,51489f1d-efb1-3ff1-bd82-5e7e982ad0ae,286683ca-df47-3bf1-9f2f-2f2aa35bb710"
+    ops: "f6711342-17ef-35fa-9dc5-078b0bfe88b8"
     eula: "TRUE"
     type: MODRINTH
     version: "1.20.1"
+
+    worldSaveName: 0xk3m
+    levelSeed: ""
 
     gameMode: survival
     difficulty: normal
