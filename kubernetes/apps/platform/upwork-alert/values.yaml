@@ -8,7 +8,8 @@ image:
 imagePullSecrets:
   - name: ghcr
 
-schedule: "*/30 * * * *"
+schedule: "0,30 8-20 * * *"
+timeZone: "Asia/Ho_Chi_Minh"
 successfulJobsHistoryLimit: 3
 failedJobsHistoryLimit: 1
 concurrencyPolicy: Forbid
