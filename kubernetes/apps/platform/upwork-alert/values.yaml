@@ -1,0 +1,75 @@
+nameOverride: upwork-alert
+
+image:
+  repository: ghcr.io/khimnguynnn/upwork-job-alert
+  tag: "0.1.0"
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: ghcr
+
+schedule: "*/30 * * * *"
+successfulJobsHistoryLimit: 3
+failedJobsHistoryLimit: 1
+concurrencyPolicy: Forbid
+startingDeadlineSeconds: 300
+
+job:
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  restartPolicy: OnFailure
+
+env:
+  - name: REDIS_HOST
+    value: "redis-headless.database.svc.cluster.local"
+  - name: REDIS_PORT
+    value: "6379"
+  - name: REDIS_DB
+    value: "0"
+  - name: JOB_TTL_SECONDS
+    value: "604800"  # 7 days
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStore:
+    name: vault-backend
+    kind: ClusterSecretStore
+  secrets:
+    - secretKey: UPWORK_AUTH_TOKEN
+      remoteRef:
+        key: platform/upwork
+        property: auth_token
+    - secretKey: UPWORK_TENANT_ID
+      remoteRef:
+        key: platform/upwork
+        property: tenant_id
+    - secretKey: UPWORK_COOKIES
+      remoteRef:
+        key: platform/upwork
+        property: cookies
+    - secretKey: TELEGRAM_BOT_TOKEN
+      remoteRef:
+        key: platform/upwork
+        property: telegram_bot_token
+    - secretKey: TELEGRAM_CHAT_ID
+      remoteRef:
+        key: platform/upwork
+        property: telegram_chat_id

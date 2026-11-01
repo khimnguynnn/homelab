@@ -1,0 +1,6 @@
+apiVersion: v2
+name: upwork-alert
+description: Upwork job alert CronJob
+type: application
+version: 1.0.0
+appVersion: "0.1.0"
