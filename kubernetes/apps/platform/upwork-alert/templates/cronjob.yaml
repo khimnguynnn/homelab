@@ -6,6 +6,7 @@ metadata:
     {{- include "upwork-alert.labels" . | nindent 4 }}
 spec:
   schedule: {{ .Values.schedule | quote }}
+  timeZone: {{ .Values.timeZone | quote }}
   successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
   concurrencyPolicy: {{ .Values.concurrencyPolicy }}
