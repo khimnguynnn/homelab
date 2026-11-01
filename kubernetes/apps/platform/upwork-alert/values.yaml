@@ -2,7 +2,7 @@ nameOverride: upwork-alert
 
 image:
   repository: ghcr.io/khimnguynnn/upwork-job-alert
-  tag: "0.1.0"
+  tag: "0.1.1"
   pullPolicy: Always
 
 imagePullSecrets:
@@ -56,20 +56,20 @@ externalSecret:
     - secretKey: UPWORK_AUTH_TOKEN
       remoteRef:
         key: platform/upwork
-        property: auth_token
+        property: UPWORK_AUTH_TOKEN
     - secretKey: UPWORK_TENANT_ID
       remoteRef:
         key: platform/upwork
-        property: tenant_id
+        property: UPWORK_TENANT_ID
     - secretKey: UPWORK_COOKIES
       remoteRef:
         key: platform/upwork
-        property: cookies
+        property: UPWORK_COOKIES
     - secretKey: TELEGRAM_BOT_TOKEN
       remoteRef:
         key: platform/upwork
-        property: telegram_bot_token
+        property: TELEGRAM_BOT_TOKEN
     - secretKey: TELEGRAM_CHAT_ID
       remoteRef:
         key: platform/upwork
-        property: telegram_chat_id
+        property: TELEGRAM_CHAT_ID
